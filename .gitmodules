@@ -1,0 +1,15 @@
+[submodule "Spotify_Analysis"]
+	path = Spotify_Analysis
+	url = https://github.com/marquesjchacon/Spotify_Analysis
+[submodule "Scholarship_Recipient_Analysis"]
+	path = Scholarship_Recipient_Analysis
+	url = https://github.com/marquesjchacon/Scholarship_Recipient_Analysis
+[submodule "board_game_analysis"]
+	path = board_game_analysis
+	url = https://github.com/marquesjchacon/board_game_analysis
+[submodule "svd_analysis_us_congress"]
+	path = svd_analysis_us_congress
+	url = https://github.com/marquesjchacon/svd_analysis_us_congress
+[submodule "Hot_100_Spotify_Analysis"]
+	path = Hot_100_Spotify_Analysis
+	url = https://github.com/marquesjchacon/Hot_100_Spotify_Analysis

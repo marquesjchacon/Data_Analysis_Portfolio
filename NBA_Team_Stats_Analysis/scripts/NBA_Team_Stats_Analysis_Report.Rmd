@@ -1,0 +1,516 @@
+---
+title: "NBA Team Stats Analysis"
+author: "Marques Chacon"
+date: "5/22/2022"
+output: html_document
+---
+
+```{r, eval = TRUE, include = FALSE, echo = FALSE}
+library(tidyverse)
+library(here)
+library(lubridate)
+library(aod)
+```
+
+## Introduction - Loading the Necessary Plots
+
+In this analyis, I will be examining different types of trends shown in a dataset of NBA team stats, taken from games played between 2014 and 2018. As an avid sports fan, I wanted to see if I can identify patterns in team metrics and identify teams that are more likely to win than others, based on those metrics. Since there is a lot of variability in sports data, I wanted to see if I can find some consistent patterns. To begin this analysis,  I downloaded a csv file from Kaggle and then loaded the file into R:
+
+```{r message=FALSE, warning=FALSE}
+# Read in the csv file as a dataframe and cleans up some of the formatting
+data <- read_csv(here("data", "nba.games.stats.csv"))
+data <- data %>%
+  mutate(Season = ifelse(month(Date) > 9,
+                         paste(year(Date), "-", year(Date) + 1),
+                         paste(year(Date) - 1, "-", year(Date))),
+         X1 = NULL)
+```
+
+## A First Glance -- Examining Win Totals
+
+For the first part of my analysis, I decided to take a quick glance at each team's win total for each of the four seasons available (2014-2018). I mostly wanted to create a data visualization that made it easily identifiable which teams performed well in each season. To create the visualization, I first initialized two vectors representing primary and secondary team colors:
+
+```{r, warning=FALSE}
+# Sets the team colors to make bars more distinguishable when creating bar graphs
+primary_team_colors <- c("#E03A3E", "#007A33", "#000000", "#CE1141", "#1D1160",
+                         "#860038", "#00538C", "#0E2240", "#C8102E", "#1D428A",
+                         "#CE1141", "#002D62", "#C8102E", "#552583", "#5D76A9",
+                         "#98002E", "#00471B", "#0C2340", "#0C2340", "#006BB6",
+                         "#007AC1", "#0077C0", "#006BB6", "#1D1160", "#E03A3E",
+                         "#5A2D81", "#C4CED4", "#CE1141", "#002B5C", "#002B5C")
+secondary_team_colors <- c("#C1D32F", "#BA9653", "#FFFFFF", "#000000", "#00788C",
+                           "#041E42", "#002B5E", "#FEC524", "#1D42BA", "#FFC72C",
+                           "#000000", "#FDBB30", "#1D428A", "#FDB927", "#12173F",
+                           "#F9A01B", "#EEE1C6", "#236192", "#C8102E", "#F58426",
+                           "#EF3B24", "#C4CED4", "#ED174C", "#E56020", "#000000",
+                           "#63727A", "#000000", "#000000", "#00471B", "#E31837")
+```
+
+Next, I altered the dataframe to highlight the number of wins per season, by performing aggregate calculations on individual wins:
+
+```{r, warning=FALSE}
+# Filters dataframe to show only wins for each team and then aggregates by the
+# number of wins for each team, for each season
+season_wins <- data %>%
+  filter(WINorLOSS == "W") %>%
+  count(Team, Season) %>%
+  rename(Wins = "n")
+```
+
+Finally, I used this modified dataframe to create a barplot that highlights win totals for each team, for each season:
+
+```{r, message=FALSE, warning=FALSE}
+# Creates a barplot showing the number of wins for each team during each season
+season_wins_plot <- ggplot(season_wins) +
+  geom_col(aes(Team, Wins), fill = rep(primary_team_colors, 4), color = 'black') +
+  facet_wrap(~Season) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  geom_text(aes(Team, Wins, label = Team),
+            color = rep(secondary_team_colors, each = 4),
+            angle = 90, size = 3, hjust = 1.25, fontface = "bold") +
+  ggtitle("Number of Regular Season Wins for Each NBA Team, 2014-2018")
+
+season_wins_plot
+```
+
+As we can see from this graph, each team has its unique color scheme (where I found the hex values online). A cursory glance at these graphs shows that the Golden State Warriors had on average the highest win total, having the highest amount of wins in 3 out of the 4 seasons. We also see teams such as the Atlanta Hawks decreasing their win total with each successive season, while teams such as the Minnesota Timberwolves steadily increased their win total each season. On the whole though, there doesn't seem to be a ton of movement from season to season. In other words, most teams who do well in one season are likely to perform well the next season, while teams who perform poorly are likely to remain poor. From these graphs, we notice that maybe one or two new teams enter the elite ranks while the same number of teams join the bottom.
+
+## Looking at Hidden Trends, Testing for Statistical Significance
+
+During the next phase of this analysis, I dug deeper into the dataset and tried finding hidden trends. I wanted to see if there were any correlations between variables or statistically significant results that would indicate that certain parameters are likely to be outside a certain range. First, I wanted to compare 3-point percentage to free throw percentage:
+
+```{r message=FALSE, warning=FALSE}
+# Comparing 3-point pct. with Free Throw Pct.
+three_pt_vs_free_throw <- ggplot(data) +
+  geom_point(aes(X3PointShots., FreeThrows.)) +
+  xlab("3 Point Percentage") +
+  ylab("Free Throw Percentage") +
+  ggtitle("3-Point Percentage vs. Free Throw Percentage")
+
+three_pt_vs_free_throw
+```
+
+As we can see from the graph above, there is virtually no correlation between free throw percentage and 3-point percentage. This is quite surprising, as I would suspect that if a team has a really high free throw percentage, then the same would be true for their free throws as well. I suppose that shooting free throws is a static action, whereas shooting 3-pointers involves gameplay and player movement. Thus, if a team has a high 3-point percentage, it may not translate well on free throws where a player is standing still and not in the middle or a possession.
+
+Although we can see that there is little correlation, we can measure just how correlated these variables are by calculating a correlation coefficient.
+
+```{r message=FALSE, warning=FALSE}
+# Calculating Correlation Coefficient
+cor(data$X3PointShots., data$FreeThrows., method = "pearson")
+cor.test(data$X3PointShots., data$FreeThrows., method = "pearson")
+```
+
+As we can see, the correlation coefficient is 0.03. This means that there is a very weak positive correlation. The hypothesis test shows that the true correlation is likely not 0. Which means that although there is a weak correlation, there is likely still a correlation between the two variables anyway. Thus, these results suggest that free throw percentage and 3-point percentage are likely to have a slight impact on each other, despite that correlation being very weak.
+
+I took this plot a step further and looked at which of these teams won their game. Using the same graph as before, I overlayed a color scheme denoting whether said team won or lost their game.
+
+```{r message=FALSE, warning=FALSE}
+# Comparing 3-point pct. with Free Throw Pct., And color-coding for wins and losses
+three_pt_vs_free_throw <- ggplot(data) +
+  geom_point(aes(X3PointShots., FreeThrows., color = WINorLOSS)) +
+  xlab("3 Point Percentage") +
+  ylab("Free Throw Percentage") +
+  ggtitle("3-Point Percentage vs. Free Throw Percentage")
+
+three_pt_vs_free_throw
+```
+
+This graph shows some interesting results now. As we can see, teams with a higher 3-point percentage were more likely to win their game, with a near guarantee to win if the 3-point percentage exceeded 50%. Free throw percentage, on the other hand, does not seem to be a strong predictor of wins and losses, as winning and losing teams are scattered all around. This does make sense though, because a team is more likely to attempt 3 pointers than have free throw opportunities. Since 3-point plays have higher impact on the game, then nailing a higher percentage will yield a higher impact on the team's score. So intuitively, these results make sense.
+
+The next thing I wanted to examine was team trends over the course of a season. I expect that teams should play better over the course of a season. However, I was curious to see what stats in particular changed over the course of a season.
+
+```{r message=FALSE, warning=FALSE}
+# Comparing the League Average in different metrics across a whole season,
+# for each season
+league_avgs <- data %>%
+  group_by(Game) %>%
+  summarise(Points = mean(TeamPoints),
+            FieldGoalPct = mean(FieldGoals.),
+            ThreePointPct = mean(X3PointShots.),
+            FreeThrowPct = mean(FreeThrows.),
+            Assists = mean(Assists),
+            Turnovers = mean(Turnovers),
+            Fouls = mean(TotalFouls)) %>%
+  gather(variable, value, Points:Fouls, factor_key = TRUE)
+
+league_avgs_plot <- ggplot(league_avgs) +
+  geom_line(aes(Game, value)) +
+  facet_wrap(~variable, scales = "free_y") +
+  ggtitle("NBA League Averages Across different team metrics over the course of
+          a season")
+league_avgs_plot
+```
+
+These graphs reveal interesting insights. We notice that over the course of a season, points scored steadily increases, field goal percentage slghtly increases, three point percentage increases, etc. The more interesting trends show that the league average in assists increases by more than 2 more assists per game over the course of a season. This makes sense if we consider team chemistry. Teams with more chemistry are likely to know how to utilize their players in support roles and thus will be able to use assists more effectively. We also notice that turnovers decrease over the course of a season. Which also makes sense if we consider that teams make less errors the more time they spend practicing and the more chemistry that has been developed. By the same token, fouls also decrease, due to less errors.
+
+After analyzing league averages over the course of a season, I wanted to compare field goal percentage for home and away games. In particular, I wanted to know just how big the advantage was, and test for statistical significance in those results.
+
+```{r message=FALSE, warning=FALSE}
+# Season Field Goal Pct Averages, Home vs Away, Across 4 Different Seasons
+league_fgpct <- data %>% 
+  group_by(Season, Home) %>% 
+  summarise(FieldGoalPct = sum(FieldGoals)/sum(FieldGoalsAttempted),
+            FieldGoals = sum(FieldGoals),
+            FieldGoalsAttempted = sum(FieldGoalsAttempted))
+
+league_fgpct_plot <- ggplot(league_fgpct) +
+  geom_col(aes(Home, FieldGoalPct, fill = Home)) +
+  facet_wrap(~Season) +
+  scale_fill_manual(values = c("#FF0000", "#00FF00")) +
+  theme(axis.title.x = element_blank()) +
+  geom_text(aes(Home, FieldGoalPct, label = round(FieldGoalPct, 3)),
+            vjust = 1)
+
+league_fgpct_plot
+```
+
+As expected, the field goal percentage in home games is higher than the field goal percentage in away games. What is surprising is how consistent the difference is each season. On average, the home field goal percentage is 1 point higher than the away field goal percentage for a season, even when the field goal percentage overall is increasing. This suggests that overall field goal percentage is steadily increasing each season.
+
+The consistency in these results made me want to use a 2 proportion t-test to calculate confidence intervals in the difference in field goal percentage between home and away games.
+
+```{r message=FALSE, warning=FALSE}
+# Using 2-proportion t-test to calculate p-value and confidence intervals for
+# percentage differences between Home and Away Games
+league_fgpct <- league_fgpct %>%
+  pivot_wider(names_from = Home,
+              values_from =c(FieldGoalPct, FieldGoals, FieldGoalsAttempted))
+
+overall_res <- prop.test(x = c(sum(league_fgpct$FieldGoals_Home),
+                               sum(league_fgpct$FieldGoals_Away)),
+                         n = c(sum(league_fgpct$FieldGoalsAttempted_Home),
+                               sum(league_fgpct$FieldGoalsAttempted_Away)))
+overall_res
+```
+
+From these results, we notice that the difference is centered between 0.08 and 0.12. This is right in line for the results each season, which mostly differed by 0.10, or 1 percentage point. Since 0 falls outside of our 95% confidence interval, then we should expect a better home percentage than away percentage, even if small.
+
+## Using Existing Game Data to Predict Win Probability Under Different Parameters
+
+In this part of the analysis, I wanted to take things a step further. We have insights on how certain team metrics improve over the course of a season, as well as the pointed difference between field goal percentage in Home vs. Away games. I wanted to see if we could produce any predictive results based on this data, as opposed to just summarizing hidden trends. Thus, I decided to look into different machine learning methods and applying models that would make sense for this data. I was curious to see if we could predict the likelihood of winning a game, given a team's field goal percentage. I started by creating a logistic regression model to simulate the data.
+
+```{r message=FALSE, warning=FALSE}
+# Creating a Logistic Regression Model to Predict the Likelihood of Winning,
+# given the individual stats for a team
+data$WINorLOSS <- factor(data$WINorLOSS)
+data$Home <- factor(data$Home)
+mylogit <- glm(WINorLOSS ~ Home + FieldGoals. + X3PointShots. + FreeThrows +
+                 TotalRebounds + Assists + Steals + Blocks + Turnovers +
+                 TotalFouls, data = data, family = "binomial")
+summary(mylogit)
+```
+
+The output of the `summary(mylogit)` call gives us a lot of information about this data. Let's break it down step by step:
+
+* The deviance residuals tell us how the residuals (the difference between predicted vs actual response values) are distributed. We see that the median residual value is 0, with the first, third, minimum, and maximum quartiles being roughly symmetrical about that value. This indicates that the residuals are random and normally distributed, which indicates that the generalized linear model is a good fit for our data.
+
+* The coefficients give us approximate values for each variable (listed under Estimate), as well as their standard error, which gives us an idea of how spread out these coefficient estimates would differ using different samples. In other words, it's giving a range of values that most estimates would fall in for each coefficient.   The Z values for each coefficient are calculated by dividing the Estimate by the standard error. High Z values indicate that a coefficient estimate is both high and precise enough to not be 0, which also indicates that the probability of finding a value more extreme is low. In other words this means that each coefficient has a measurable impact on the predicted probability of winning a game.
+
+From this, we can see that each team metric has a measurable impact on whether or not they win a game. For instance, the estimate for field goal percentage is 33.87 which means that for every unit rise in field goal percentage (100%), then the predicted probabliity will go up 33.87. This translates to a 33% increase in win probability for each percentage point increase in field goal percentage.
+
+Next I decided to test the statistical significance on playing at home or away, on the predicted probability.
+
+```{r message=FALSE, warning=FALSE}
+# Tests whether the effect of playing at Home or Away is statistically significant
+wald.test(b = coef(mylogit), Sigma = vcov(mylogit), Terms = 2)
+```
+
+From the results of the Wald test, we notice that the p-value- is extremely low. This indicates that playing at home vs. away has a statistically significant difference on the win probability.
+
+For the next part of the analysis, I focused on the probability of winning a game at home vs. away, when you keep every other variable controlled at their means. I wanted to see just how much of a difference playing at home or away has.
+
+```{r message=FALSE, warning=FALSE}
+# Tests the probability of winning at Home vs Away, keeping everything else equal
+newdata <- with(data, data.frame(FieldGoals. = mean(FieldGoals.),
+                                 X3PointShots. = mean(X3PointShots.),
+                                 FreeThrows = mean(FreeThrows),
+                                 TotalRebounds = mean(TotalRebounds),
+                                 Assists = mean(Assists),
+                                 Steals = mean(Steals),
+                                 Blocks = mean(Blocks),
+                                 Turnovers = mean(Turnovers),
+                                 TotalFouls = mean(TotalFouls),
+                                 Home = factor(c("Home", "Away"))))
+newdata$PredProb <- predict(mylogit, newdata = newdata, type = "response")
+
+newdata
+```
+
+The resulting dataframe shows a lot of information, including the means for each team metric (regardless of home or away). The one different column is the PredProb column, which indicates the predicaed probability of winning a game at home vs. away, keeping all other team metrics equal. From this, we see that keep everything at the mean level, winning a game at home has a 55% probability while winning an away game has a 46% probability.
+
+While this shows that there is a definite difference between the win probability of home and away games, we can find further insight by varying field goal percentage and seeing how that impacts win probability.
+
+```{r message=FALSE, warning=FALSE}
+# Tests the probability of Winning At Home vs. Away, at different values
+# for field goal percentage
+newdata <- with(data, data.frame(FieldGoals. = rep(seq(from = .20, to = .80,
+                                                       length.out = 1000)),
+                                 X3PointShots. = mean(X3PointShots.),
+                                 FreeThrows = mean(FreeThrows),
+                                 TotalRebounds = mean(TotalRebounds),
+                                 Assists = mean(Assists),
+                                 Steals = mean(Steals),
+                                 Blocks = mean(Blocks),
+                                 Turnovers = mean(Turnovers),
+                                 TotalFouls = mean(TotalFouls),
+                                 Home = factor(rep(c("Home", "Away"),
+                                                   each = 1000))))
+newdata <- cbind(newdata, predict(mylogit, newdata = newdata, type = "link",
+                                  se = TRUE))
+newdata <- within(newdata, {
+  PredProb <- plogis(fit)
+  LL <- plogis(fit - (1.96 * se.fit))
+  UL <- plogis(fit + (1.96 * se.fit))
+})
+```
+
+As we can see from this table, the predicted probability steadily increases for each little increase in field goal percentage, and the predicted win probability is overall higher when playing at home vs playing away, for each different field goal percentage value.
+
+It is really difficult to see the overall trend from this table as it is a bunch of values. Creating a graph can help bring context to the underlying trends here.
+
+```{r message=FALSE, warning=FALSE}
+# Constructing a graph of the probability of winning at different field goal
+# percentages, stratifying based on Home vs. Away
+ggplot(newdata, aes(x = FieldGoals., y = PredProb)) + 
+  geom_ribbon(aes(ymin = LL, ymax = UL, fill = Home), alpha = 0.2) +
+  geom_line(aes(colour = Home), size = 1) +
+  xlim(0.3, 0.6) +
+  xlab("Field Goal Percentage") +
+  ylab("Predicted Probability") +
+  ggtitle("Probablility of Winning an NBA Game given different field goal
+          percentages")
+```
+
+We see several insights from this graph. For one, home win probability is always higher than away win probability. Secondly, both home and away win probabilities near 100% when a team makes around 60% of their field goals, and near 0% when a team only makes 30% of their field goals. After those points, there is little very marginal effect on win probability. Finally, there is the greatest net impact in win probabilty when field goal percentage changes relative to 45%.
+
+## Conclusion
+
+This analysis explored some trends into a dataset depicting NBA game stats. Overall, we see significant effects on multiple team metrics on win probability, with home vs away having perhaps one of the largest impacts. Other relationships did not seem to have a significant correlation, such as free throw percentage and 3 point percentage. However, if we added another variable for whether or not a team won their game, then we see that there are meaningful clusters in teams that win their game vs those that do not, along the axes of 3 point and free throw percentages. These findings are useful for understanding how certain team metrics play a role in NBA games, and in particular which ones have an impact, and boundary values for separating wins from losses.
+
+## Appendix
+```{r eval=FALSE}
+# Load the Necessary Libraries
+library(tidyverse)
+library(here)
+library(lubridate)
+library(aod)
+
+# Read in the csv file as a dataframe and cleans up some of the formatting
+data <- read_csv(here("data", "nba.games.stats.csv"))
+data <- data %>%
+  mutate(Season = ifelse(month(Date) > 9,
+                         paste(year(Date), "-", year(Date) + 1),
+                         paste(year(Date) - 1, "-", year(Date))),
+         X1 = NULL)
+
+# Sets the team colors to make bars more distinguishable when creating bar graphs
+primary_team_colors <- c("#E03A3E", "#007A33", "#000000", "#CE1141", "#1D1160",
+                         "#860038", "#00538C", "#0E2240", "#C8102E", "#1D428A",
+                         "#CE1141", "#002D62", "#C8102E", "#552583", "#5D76A9",
+                         "#98002E", "#00471B", "#0C2340", "#0C2340", "#006BB6",
+                         "#007AC1", "#0077C0", "#006BB6", "#1D1160", "#E03A3E",
+                         "#5A2D81", "#C4CED4", "#CE1141", "#002B5C", "#002B5C")
+secondary_team_colors <- c("#C1D32F", "#BA9653", "#FFFFFF", "#000000", "#00788C",
+                           "#041E42", "#002B5E", "#FEC524", "#1D42BA", "#FFC72C",
+                           "#000000", "#FDBB30", "#1D428A", "#FDB927", "#12173F",
+                           "#F9A01B", "#EEE1C6", "#236192", "#C8102E", "#F58426",
+                           "#EF3B24", "#C4CED4", "#ED174C", "#E56020", "#000000",
+                           "#63727A", "#000000", "#000000", "#00471B", "#E31837")
+
+# Filters dataframe to show only wins for each team and then aggregates by the
+# number of wins for each team, for each season
+season_wins <- data %>%
+  filter(WINorLOSS == "W") %>%
+  count(Team, Season) %>%
+  rename(Wins = "n")
+
+# Creates a barplot showing the number of wins for each team during each season
+season_wins_plot <- ggplot(season_wins) +
+  geom_col(aes(Team, Wins), fill = rep(primary_team_colors, 4), color = 'black') +
+  facet_wrap(~Season) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  geom_text(aes(Team, Wins, label = Team),
+            color = rep(secondary_team_colors, each = 4),
+            angle = 90, size = 3, hjust = 1.25, fontface = "bold") +
+  ggtitle("Number of Regular Season Wins for Each NBA Team, 2014-2018")
+
+season_wins_plot
+
+
+# Comparing 3-point pct. with Free Throw Pct.
+three_pt_vs_free_throw <- ggplot(data) +
+  geom_point(aes(X3PointShots., FreeThrows., color = WINorLOSS)) +
+  xlab("3 Point Percentage") +
+  ylab("Free Throw Percentage") +
+  ggtitle("3-Point Percentage vs. Free Throw Percentage")
+
+three_pt_vs_free_throw
+
+# Calculating Correlation Coefficient
+cor(data$X3PointShots., data$FreeThrows., method = "pearson")
+cor.test(data$X3PointShots., data$FreeThrows., method = "pearson")
+
+# Comparing the League Average in different metrics across a whole season,
+# for each season
+league_avgs <- data %>%
+  group_by(Game) %>%
+  summarise(Points = mean(TeamPoints),
+            FieldGoalPct = mean(FieldGoals.),
+            ThreePointPct = mean(X3PointShots.),
+            FreeThrowPct = mean(FreeThrows.),
+            Assists = mean(Assists),
+            Turnovers = mean(Turnovers),
+            Fouls = mean(TotalFouls)) %>%
+  gather(variable, value, Points:Fouls, factor_key = TRUE)
+
+league_avgs_plot <- ggplot(league_avgs) +
+  geom_line(aes(Game, value)) +
+  facet_wrap(~variable, scales = "free_y") +
+  ggtitle("NBA League Averages Across different team metrics over the course of
+          a season")
+league_avgs_plot
+
+# Season Field Goal Pct Averages, Home vs Away, Across 4 Different Seasons
+season_fgpct <- data %>%
+  group_by(Season, Team, Home) %>%
+  summarise(FieldGoalPct = sum(FieldGoals)/sum(FieldGoalsAttempted))
+
+season_fgpct_plot <- ggplot(season_fgpct) +
+  geom_col(aes(Team, FieldGoalPct, alpha = Home),
+           position = "dodge",
+           fill = rep(primary_team_colors, 4, each = 2)) +
+  facet_wrap(~Season, scales = "free_y") +
+  ylab("Season Field Goal Percentage") +
+  ggtitle(label = "Season Field Goal Percentages for Each Team",
+          subtitle = "(Home vs. Away, Across 4 Different Seasons)") +
+  geom_text(aes(Team, FieldGoalPct, label = Team, group = Home),
+            color = rep(secondary_team_colors, 4, each = 2),
+            angle = 90, size = 1.75, hjust = 1.25, vjust = 0.25,
+            position = position_dodge(width = 0.9),
+            fontface = "bold") +
+  scale_alpha_manual(values = c(0.5, 1)) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+season_fgpct_plot
+
+# Does the same as above but with league percentages instead of team percentages
+league_fgpct <- data %>% 
+  group_by(Season, Home) %>% 
+  summarise(FieldGoalPct = sum(FieldGoals)/sum(FieldGoalsAttempted),
+            FieldGoals = sum(FieldGoals),
+            FieldGoalsAttempted = sum(FieldGoalsAttempted))
+
+league_fgpct_plot <- ggplot(league_fgpct) +
+  geom_col(aes(Home, FieldGoalPct, fill = Home)) +
+  facet_wrap(~Season) +
+  scale_fill_manual(values = c("#FF0000", "#00FF00")) +
+  theme(axis.title.x = element_blank()) +
+  geom_text(aes(Home, FieldGoalPct, label = round(FieldGoalPct, 3)),
+            vjust = 1)
+
+league_fgpct_plot
+
+# Using 2-proportion t-test to calculate p-value and confidence intervals for
+# percentage differences between Home and Away Games
+league_fgpct <- league_fgpct %>%
+  pivot_wider(names_from = Home,
+              values_from =c(FieldGoalPct, FieldGoals, FieldGoalsAttempted))
+
+res_2014_2015 <- prop.test(x = c(league_fgpct$FieldGoals_Home[[1]],
+                                 league_fgpct$FieldGoals_Away[[1]]),
+                           n = c(league_fgpct$FieldGoalsAttempted_Home[[1]],
+                                 league_fgpct$FieldGoalsAttempted_Away[[1]]))
+res_2015_2016 <- prop.test(x = c(league_fgpct$FieldGoals_Home[[2]],
+                                 league_fgpct$FieldGoals_Away[[2]]),
+                           n = c(league_fgpct$FieldGoalsAttempted_Home[[2]],
+                                 league_fgpct$FieldGoalsAttempted_Away[[2]]))
+res_2016_2017 <- prop.test(x = c(league_fgpct$FieldGoals_Home[[3]],
+                                 league_fgpct$FieldGoals_Away[[3]]),
+                           n = c(league_fgpct$FieldGoalsAttempted_Home[[3]],
+                                 league_fgpct$FieldGoalsAttempted_Away[[3]]))
+res_2017_2018 <- prop.test(x = c(league_fgpct$FieldGoals_Home[[4]],
+                                 league_fgpct$FieldGoals_Away[[4]]),
+                           n = c(league_fgpct$FieldGoalsAttempted_Home[[4]],
+                                 league_fgpct$FieldGoalsAttempted_Away[[4]]))
+overall_res <- prop.test(x = c(sum(league_fgpct$FieldGoals_Home),
+                               sum(league_fgpct$FieldGoals_Away)),
+                         n = c(sum(league_fgpct$FieldGoalsAttempted_Home),
+                               sum(league_fgpct$FieldGoalsAttempted_Away)))
+
+res_2014_2015
+res_2015_2016
+res_2016_2017
+res_2017_2018
+overall_res
+
+# Comparing the percentage difference between seasons
+over_the_years_comparison <- ggplot(league_fgpct, aes(group = 1)) +
+  geom_line(aes(Season, FieldGoalPct_Home), color = 'green') +
+  geom_point(aes(Season, FieldGoalPct_Home)) +
+  geom_line(aes(Season, FieldGoalPct_Away), color = 'red') +
+  geom_point(aes(Season, FieldGoalPct_Away))
+
+over_the_years_comparison
+
+# Creating a Logistic Regression Model to Predict the Likelihood of Winning,
+# given the individual stats for a team
+data$WINorLOSS <- factor(data$WINorLOSS)
+data$Home <- factor(data$Home)
+mylogit <- glm(WINorLOSS ~ Home + FieldGoals. + X3PointShots. + FreeThrows +
+                 TotalRebounds + Assists + Steals + Blocks + Turnovers +
+                 TotalFouls, data = data, family = "binomial")
+summary(mylogit)
+
+# Tests whether the effect of playing at Home or Away is statistically significant
+wald.test(b = coef(mylogit), Sigma = vcov(mylogit), Terms = 2)
+
+# Tests the probability of winning at Home vs Away, keeping everything else equal
+newdata <- with(data, data.frame(FieldGoals. = mean(FieldGoals.),
+                                 X3PointShots. = mean(X3PointShots.),
+                                 FreeThrows = mean(FreeThrows),
+                                 TotalRebounds = mean(TotalRebounds),
+                                 Assists = mean(Assists),
+                                 Steals = mean(Steals),
+                                 Blocks = mean(Blocks),
+                                 Turnovers = mean(Turnovers),
+                                 TotalFouls = mean(TotalFouls),
+                                 Home = factor(c("Home", "Away"))))
+newdata$PredProb <- predict(mylogit, newdata = newdata, type = "response")
+
+# Tests the probability of Winning At Home vs. Away, at different values
+# for field goal percentage
+newdata <- with(data, data.frame(FieldGoals. = rep(seq(from = .20, to = .80,
+                                                       length.out = 1000)),
+                                 X3PointShots. = mean(X3PointShots.),
+                                 FreeThrows = mean(FreeThrows),
+                                 TotalRebounds = mean(TotalRebounds),
+                                 Assists = mean(Assists),
+                                 Steals = mean(Steals),
+                                 Blocks = mean(Blocks),
+                                 Turnovers = mean(Turnovers),
+                                 TotalFouls = mean(TotalFouls),
+                                 Home = factor(rep(c("Home", "Away"),
+                                                   each = 1000))))
+newdata <- cbind(newdata, predict(mylogit, newdata = newdata, type = "link",
+                                  se = TRUE))
+newdata <- within(newdata, {
+  PredProb <- plogis(fit)
+  LL <- plogis(fit - (1.96 * se.fit))
+  UL <- plogis(fit + (1.96 * se.fit))
+})
+
+# Constructing a graph of the probability of winning at different field goal
+# percentages, stratifying based on Home vs. Away
+ggplot(newdata, aes(x = FieldGoals., y = PredProb)) + 
+  geom_ribbon(aes(ymin = LL, ymax = UL, fill = Home), alpha = 0.2) +
+  geom_line(aes(colour = Home), size = 1) +
+  xlim(0.4, 0.5) +
+  xlab("Field Goal Percentage") +
+  ylab("Predicted Probability") +
+  ggtitle("Probablility of Winning an NBA Game given different field goal
+          percentages")
